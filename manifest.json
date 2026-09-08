@@ -1,6 +1,6 @@
 {
-  "name": "記帳アプリ",
-  "short_name": "記帳アプリ",
+  "name": "収支計算アプリ",
+  "short_name": "収支計算アプリ",
   "description": "レシートの記帳・仕訳帳・消費税集計・確定申告用の収支内訳書出力ができる記帳代行用アプリ",
   "start_url": "./index.html",
   "scope": "./",

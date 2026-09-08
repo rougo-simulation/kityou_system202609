@@ -1,4 +1,4 @@
-# 記帳アプリ（PWA / GitHub Pages 公開用）
+# 収支計算アプリ（PWA / GitHub Pages 公開用）
 
 このフォルダはそのまま新しいGitHubリポジトリの直下（ルート）にアップロードすれば、GitHub Pagesでスマホアプリのように使えるPWA（Progressive Web App）として公開できます。
 
