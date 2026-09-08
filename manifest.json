@@ -1,0 +1,32 @@
+{
+  "name": "記帳アプリ",
+  "short_name": "記帳アプリ",
+  "description": "レシートの記帳・仕訳帳・消費税集計・確定申告用の収支内訳書出力ができる記帳代行用アプリ",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EDEBE4",
+  "theme_color": "#1E5A48",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
