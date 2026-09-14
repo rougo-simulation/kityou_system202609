@@ -280,6 +280,17 @@
       <button class="ghost" id="backup-import" style="margin-bottom:4px">バックアップで全体を上書きする</button>
       <input type="file" id="restore-file" accept="application/json" style="display:none">
       <p class="tiny muted" style="margin-top:10px">最終保存: <span id="last-saved">-</span>（この端末のブラウザ内に自動保存されています）</p>
+
+      <p class="tiny muted" style="margin:18px 0 6px">バージョン情報</p>
+      <div class="card" style="margin-bottom:10px">
+        <p class="tiny muted">現在のバージョン</p>
+        <p id="app-version" style="font-weight:700;font-size:14px">-</p>
+      </div>
+      <button class="ghost" id="check-update">アップデートを確認</button>
+      <div id="update-banner" class="card" style="display:none;background:var(--accent-bg);margin-top:8px">
+        <p style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:8px">新しいバージョンがあります</p>
+        <button class="primary" id="apply-update">今すぐ更新する</button>
+      </div>
     </main>
   </section>
 
@@ -1230,13 +1241,83 @@
 })();
 </script>
 <script>
-if ('serviceWorker' in navigator) {
+(function () {
+  var APP_VERSION = '2026.09.14';
+  var verEl = document.getElementById('app-version');
+  if (verEl) verEl.textContent = APP_VERSION;
+
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function () { t.classList.remove('show'); }, 2200);
+  }
+  function showUpdateBanner() {
+    var banner = document.getElementById('update-banner');
+    if (banner) banner.style.display = 'block';
+  }
+
+  if (!('serviceWorker' in navigator)) {
+    var btn = document.getElementById('check-update');
+    if (btn) { btn.disabled = true; btn.textContent = 'このブラウザは更新確認に対応していません'; }
+    return;
+  }
+
+  var reg = null;
+  var refreshing = false;
+
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js').catch(function (err) {
+    navigator.serviceWorker.register('sw.js').then(function (registration) {
+      reg = registration;
+
+      // ページを開いた時点ですでに新バージョンが待機中なら、更新バナーを出す
+      if (registration.waiting && navigator.serviceWorker.controller) {
+        showUpdateBanner();
+      }
+      registration.addEventListener('updatefound', function () {
+        var newWorker = registration.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', function () {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner();
+          }
+        });
+      });
+    }).catch(function (err) {
       console.warn('Service worker registration failed:', err);
     });
   });
-}
+
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.id === 'check-update') {
+      if (!reg) { showToast('確認できませんでした。時間をおいて再度お試しください'); return; }
+      showToast('最新版を確認しています…');
+      reg.update().then(function () {
+        setTimeout(function () {
+          if (reg.waiting) {
+            showUpdateBanner();
+          } else {
+            showToast('お使いのバージョンは最新です（' + APP_VERSION + '）');
+          }
+        }, 1200);
+      }).catch(function () {
+        showToast('確認に失敗しました。通信環境をご確認ください');
+      });
+    }
+    if (e.target && e.target.id === 'apply-update') {
+      if (reg && reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+    }
+  });
+})();
 </script>
 </body>
 </html>
