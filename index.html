@@ -267,8 +267,17 @@
 
       <p class="tiny muted" style="margin-bottom:6px">データのバックアップ</p>
       <p class="tiny muted" style="margin-bottom:8px">すべての事業所のデータをまとめてファイルに書き出して保存できます。機種変更やブラウザのデータ消去に備えて、定期的なバックアップをおすすめします。</p>
-      <button class="ghost" id="backup-export" style="margin-bottom:8px">バックアップを書き出す</button>
-      <button class="ghost" id="backup-import" style="margin-bottom:4px">バックアップから復元する</button>
+      <button class="ghost" id="backup-export" style="margin-bottom:14px">バックアップを書き出す</button>
+
+      <p class="tiny muted" style="margin-bottom:6px">他の人のバックアップから事業所だけ取り込む</p>
+      <p class="tiny muted" style="margin-bottom:8px">他の端末・他の人が書き出したバックアップファイルから、必要な事業所だけを選んで、今の事業所はそのまま残して追加できます。</p>
+      <button class="ghost" id="backup-import-merge" style="margin-bottom:4px">事業所を選んで取り込む</button>
+      <input type="file" id="restore-merge-file" accept="application/json" style="display:none">
+      <div id="import-picker" style="display:none;margin-top:8px"></div>
+
+      <p class="tiny muted" style="margin:18px 0 6px">この端末のデータをまるごと置き換える</p>
+      <p class="tiny muted" style="margin-bottom:8px">この端末に今あるすべての事業所データを、バックアップファイルの内容で完全に上書きします（元に戻せません）。</p>
+      <button class="ghost" id="backup-import" style="margin-bottom:4px">バックアップで全体を上書きする</button>
       <input type="file" id="restore-file" accept="application/json" style="display:none">
       <p class="tiny muted" style="margin-top:10px">最終保存: <span id="last-saved">-</span>（この端末のブラウザ内に自動保存されています）</p>
     </main>
@@ -657,10 +666,8 @@
         '<div><label>科目</label>'+catSelectHtml+'</div>'+
         '<div><label>税率</label><select id="ed-tax">'+taxRates.map(function(r){return '<option value="'+r.rate+'"'+(r.label===t.taxLabel?' selected':'')+'>'+r.label+'</option>';}).join('')+'</select></div>'+
       '</div>'+
-      '<div class="grid2" style="margin-bottom:6px">'+
-        '<div><label>金額</label><input id="ed-amount" value="'+t.amount+'"></div>'+
-        '<div><label>日付</label><input id="ed-date" type="date" value="'+t.date+'"></div>'+
-      '</div>'+
+      '<div style="margin-bottom:6px"><label>金額</label><input id="ed-amount" value="'+t.amount+'" style="width:100%"></div>'+
+      '<div style="margin-bottom:6px"><label>日付</label><input id="ed-date" type="date" value="'+t.date+'" style="width:100%"></div>'+
       (t.type==='expense' ? '<label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px"><input type="checkbox" id="ed-invoice" '+(t.invoice?'checked':'')+' style="width:auto">適格請求書あり</label>' : '')+
       '<div class="grid2">'+
         '<button class="ghost" id="ed-save">保存</button>'+
@@ -1076,10 +1083,19 @@
   }
   $('toggle-new-vendor').addEventListener('click', function(){ var f=$('new-vendor-form'); f.style.display=(f.style.display==='none')?'block':'none'; });
   var nvKanaTouched = false;
+  var nvNameLastKanaReading = '';
+  function isAllKanaOrAscii(s){ return /^[\u3040-\u30FF\u30FCー\-A-Za-z0-9\s]*$/.test(s); }
   $('nv-kana').addEventListener('input', function(){ nvKanaTouched = true; });
   $('nv-name').addEventListener('input', function(){
     if(nvKanaTouched) return;
-    $('nv-kana').value = hiraganaToKatakana($('nv-name').value);
+    var val = $('nv-name').value;
+    if(isAllKanaOrAscii(val)){
+      nvNameLastKanaReading = val;
+      $('nv-kana').value = hiraganaToKatakana(val);
+    } else if(nvNameLastKanaReading){
+      // 漢字に変換された場合は、変換前の読み（カタカナ）をそのまま保持する
+      $('nv-kana').value = hiraganaToKatakana(nvNameLastKanaReading);
+    }
   });
   $('nv-save').addEventListener('click', function(){
     var name = $('nv-name').value.trim(), kana = $('nv-kana').value.trim();
@@ -1088,7 +1104,7 @@
     errEl.style.display = 'none';
     vendors.push({ name:name, kana:kana, category:$('nv-category').value, tax:$('nv-tax').value, invoice:$('nv-invoice').checked });
     $('nv-name').value=''; $('nv-kana').value=''; $('new-vendor-form').style.display='none';
-    nvKanaTouched = false;
+    nvKanaTouched = false; nvNameLastKanaReading = '';
     saveData(); renderVendorMaster(); toast('取引先を登録しました');
   });
 
@@ -1100,6 +1116,66 @@
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
     toast('バックアップを書き出しました');
   });
+
+  function cloneBusinessWithNewId(biz){
+    var copy = JSON.parse(JSON.stringify(biz));
+    copy.id = 'biz_'+Date.now()+'_'+Math.floor(Math.random()*100000);
+    if(!copy.categoryLabels) copy.categoryLabels = {};
+    if(!copy.vendors) copy.vendors = [];
+    if(!copy.taxRates) copy.taxRates = [ {label:'10%対象',rate:10}, {label:'8%軽減',rate:8}, {label:'非課税',rate:0} ];
+    if(!copy.tx) copy.tx = [];
+    return copy;
+  }
+  function closeImportPicker(){ var box=$('import-picker'); box.style.display='none'; box.innerHTML=''; }
+  function renderImportPicker(data){
+    var box = $('import-picker');
+    box.style.display = 'block';
+    box.innerHTML = '<div class="edit-panel">'+
+      '<p style="font-weight:700;font-size:13px;margin-bottom:8px">取り込む事業所を選択してください</p>'+
+      data.businesses.map(function(b,i){
+        var vCount = b.vendors ? b.vendors.length : 0;
+        var tCount = b.tx ? b.tx.length : 0;
+        return '<label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--border)">'+
+          '<input type="checkbox" class="import-check" data-i="'+i+'" style="width:auto">'+
+          '<span style="font-size:13px">'+b.name+' <span class="tiny muted">（取引先'+vCount+'件・取引'+tCount+'件）</span></span>'+
+        '</label>';
+      }).join('')+
+      '<div class="grid2" style="margin-top:10px">'+
+        '<button class="primary" id="import-confirm">選択した事業所を追加</button>'+
+        '<button class="ghost" id="import-cancel">キャンセル</button>'+
+      '</div>'+
+    '</div>';
+    $('import-confirm').addEventListener('click', function(){
+      var checked = document.querySelectorAll('.import-check:checked');
+      if(checked.length===0){ toast('取り込む事業所を選択してください'); return; }
+      var added = 0;
+      checked.forEach(function(cb){
+        var idx = parseInt(cb.getAttribute('data-i'),10);
+        registry.businesses.push(cloneBusinessWithNewId(data.businesses[idx]));
+        added++;
+      });
+      localStorage.setItem(REGISTRY_KEY, JSON.stringify(registry));
+      closeImportPicker();
+      renderBizList();
+      toast(added+'件の事業所を追加しました（既存の事業所はそのままです）');
+    });
+    $('import-cancel').addEventListener('click', closeImportPicker);
+  }
+  $('backup-import-merge').addEventListener('click', function(){ $('restore-merge-file').click(); });
+  $('restore-merge-file').addEventListener('change', function(e){
+    var file = e.target.files[0]; if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var parsed = JSON.parse(ev.target.result);
+        if(!parsed.businesses || !parsed.businesses.length) throw new Error('invalid');
+        renderImportPicker(parsed);
+      }catch(err){ alert('取り込みに失敗しました。正しいバックアップファイルか確認してください。'); }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
   $('backup-import').addEventListener('click', function(){ $('restore-file').click(); });
   $('restore-file').addEventListener('change', function(e){
     var file = e.target.files[0]; if(!file) return;
