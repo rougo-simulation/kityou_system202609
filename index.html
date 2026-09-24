@@ -163,6 +163,13 @@
         <label>科目で絞り込み</label>
         <select id="jr-category" style="width:100%"></select>
       </div>
+      <div style="margin-bottom:10px">
+        <label>並び順</label>
+        <div style="display:flex;gap:6px">
+          <span class="chip sort-mode" data-m="date">日付順</span>
+          <span class="chip sort-mode" data-m="input">入力順</span>
+        </div>
+      </div>
       <div id="bulk-bar" class="card" style="display:none;align-items:center;justify-content:space-between;margin-bottom:8px">
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:0"><input type="checkbox" id="select-all" style="width:auto">すべて選択</label>
         <button id="bulk-confirm" style="background:var(--accent);color:#fff;border:none;font-size:12px;padding:6px 10px">選択を一括確定</button>
@@ -605,6 +612,7 @@
   }
 
   /* ---------- 仕訳帳 ---------- */
+  var journalSortMode = 'date';
   function initJournalControls(){
     fillSelect($('jr-year'), yearsInData(), String(journalYear));
     fillSelect($('jr-month'), MONTHS, String(journalMonth));
@@ -614,7 +622,15 @@
       var text = no==='all' ? 'すべての科目' : (no+' '+catLabel(no));
       return '<option value="'+no+'"'+(no===journalCategory?' selected':'')+'>'+text+'</option>';
     }).join('');
+    document.querySelectorAll('.sort-mode').forEach(function(c){ c.classList.toggle('on', c.getAttribute('data-m')===journalSortMode); });
   }
+  document.querySelectorAll('.sort-mode').forEach(function(c){
+    c.addEventListener('click', function(){
+      journalSortMode = c.getAttribute('data-m');
+      document.querySelectorAll('.sort-mode').forEach(function(x){ x.classList.toggle('on', x===c); });
+      renderList();
+    });
+  });
   $('jr-period-toggle').addEventListener('click', function(){
     journalAllPeriod = !journalAllPeriod;
     $('jr-period-toggle').textContent = journalAllPeriod ? 'すべての期間' : '期間で絞り込み中';
@@ -630,7 +646,7 @@
     $('bulk-bar').style.display = (listFilter==='draft') ? 'flex' : 'none';
   }
   function getJournalList(){
-    return tx.filter(function(t){
+    var list = tx.filter(function(t){
       if(listFilter!=='all' && t.status!==listFilter) return false;
       if(!journalAllPeriod){
         if(t.date.slice(0,4)!==String(journalYear)) return false;
@@ -638,7 +654,13 @@
       }
       if(journalCategory!=='all' && t.category!==journalCategory) return false;
       return true;
-    }).sort(function(a,b){ return b.date.localeCompare(a.date) || (b.id>a.id?1:-1); });
+    });
+    if(journalSortMode==='input'){
+      list.sort(function(a,b){ return (b.id>a.id?1:-1); });
+    } else {
+      list.sort(function(a,b){ return b.date.localeCompare(a.date) || (b.id>a.id?1:-1); });
+    }
+    return list;
   }
   function renderList(){
     renderListFilters();
@@ -718,12 +740,13 @@
     var statusLabel = {all:'すべて', draft:'下書き', confirmed:'確定済み'}[listFilter];
     var periodLabel = journalAllPeriod ? 'すべての期間' : (journalYear+'年'+journalMonth+'月');
     var catLabelText = journalCategory==='all' ? 'すべての科目' : (journalCategory+' '+catLabel(journalCategory));
+    var sortLabel = journalSortMode==='input' ? '入力順' : '日付順';
     var total = list.reduce(function(s,t){return s+t.amount;},0);
     var rows = list.map(function(t){
       return '<tr><td>'+displayDate(t.date)+'</td><td>'+(t.vendor||'-')+'</td><td>'+catLabel(t.category)+'</td><td>'+t.taxLabel+'</td>'+
         '<td>'+(t.status==='draft'?'下書き':'確定済み')+'</td><td>'+fmt(t.amount)+'</td></tr>';
     }).join('');
-    var html = '<h2>仕訳帳　'+periodLabel+'／'+catLabelText+'／'+statusLabel+'</h2>'+
+    var html = '<h2>仕訳帳　'+periodLabel+'／'+catLabelText+'／'+statusLabel+'／'+sortLabel+'</h2>'+
       '<table><thead><tr><th>日付</th><th>取引先</th><th>科目</th><th>税率区分</th><th>状態</th><th>金額</th></tr></thead>'+
       '<tbody>'+rows+'<tr style="font-weight:700"><td colspan="5">合計</td><td>'+fmt(total)+'</td></tr></tbody></table>';
     doPrint(html);
