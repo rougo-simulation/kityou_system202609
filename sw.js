@@ -1,7 +1,7 @@
 // 記帳アプリ サービスワーカー
 // キャッシュ名はファイルを更新するたびに数字を上げてください（例: v1 -> v2）。
 // 上げないと、公開後にファイルを更新してもユーザーの端末には古いキャッシュが残り続けます。
-const CACHE_NAME = 'kicho-app-cache-v6';
+const CACHE_NAME = 'kicho-app-cache-v7';
 
 const APP_SHELL = [
   './',
